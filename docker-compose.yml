@@ -1,0 +1,45 @@
+version: "3.3"
+services:
+  mysql_db:
+    image: mysql:5.7
+    environment:
+      MYSQL_DATABASE: app_development
+      MYSQL_USER: app_development
+      MYSQL_PASSWORD: app_development
+      MYSQL_ROOT_PASSWORD: root
+      TZ: Asia/Tokyo
+    volumes:
+      - ./docker/mysql_db/db_storage:/var/lib/mysql
+      - ./docker/mysql_db/files/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./docker/mysql_db/initializer:/docker-entrypoint-initdb.d
+  rails_app:
+    image: ruby:2.7
+    environment:
+      TZ: Asia/Tokyo
+      RAILS_ENV: development
+      DB_USERNAME: app_development
+      DB_PASSWORD: app_development
+      DB_HOST: mysql_db
+      DB_SOCKET: /var/run/mysqld/mysqld.sock
+    volumes:
+      - .:/app
+      - ./docker/rails_app/scripts:/scripts
+      - /app/node_modules
+    working_dir: /app
+    command: >
+      bash -c "
+        curl -sL https://deb.nodesource.com/setup_12.x | bash - && \
+        apt-get update && apt-get install mariadb-client nodejs -y && \
+        npm install -g yarn --force && \
+        yarn upgrade && \
+        chmod +x /scripts/waitdb.sh && \
+        /scripts/waitdb.sh && \
+        bundle install && \
+        bundle exec rails assets:precompile && \
+        bundle exec rails db:migrate && \
+        bundle exec rails s -p 3000 -b 0.0.0.0
+      "
+    ports:
+      - 127.0.0.1:3000:3000
+    depends_on:
+      - mysql_db
